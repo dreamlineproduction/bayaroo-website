@@ -1,33 +1,19 @@
-"use client";
+﻿"use client";
 
-import { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import {
   Search,
   MapPin,
-  Filter,
   Star,
-  Wifi,
-  Car,
-  Utensils,
   ArrowRight,
-  Leaf,
-  Mountain,
-  Waves,
-  TreePine,
-  Home as HomeIcon,
-  X,
-  ChevronDown,
-  SlidersHorizontal,
+  ChevronLeft,
+  ChevronRight,
   Heart,
-  Share2,
-  CheckCircle2,
   Sparkles,
-  Minus,
-  Plus,
-  Phone,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
@@ -35,302 +21,148 @@ import { GuestPicker, type GuestCounts } from "@/components/ui/guest-picker";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
-// ─── Data ────────────────────────────────────────────────────────────────────
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+const STORAGE_BASE = API_BASE.replace(/\/api$/, "");
 
-const propertyTypeFilters = [
-  { id: "homestay", emoji: "🏡", label: "Homestay" },
-  { id: "resort", emoji: "🏖️", label: "Resort" },
-  { id: "farmstay", emoji: "🌿", label: "Farmstay" },
-  { id: "campsite", emoji: "⛺", label: "Campsite" },
-  { id: "villa", emoji: "🏰", label: "Villa" },
-  { id: "dome", emoji: "🔮", label: "Dome / Tent" },
-  { id: "eco-lodge", emoji: "🛖", label: "Eco Lodge" },
-  { id: "heritage", emoji: "🏛️", label: "Heritage Home" },
-];
+function resolveImg(src: string | null | undefined): string {
+  if (!src) return "";
+  if (src.startsWith("http://") || src.startsWith("https://")) return src;
+  return `${STORAGE_BASE}/${src.replace(/^\//, "")}`;
+}
+
+//    Types
+
+type ApiProperty = {
+  id: number;
+  name: string;
+  property_type: string;
+  experience_types: string[];
+  location: string;
+  city: string;
+  state: string;
+  address: string;
+  image: string;
+  images: string[];
+  min_price: number;
+  max_guests: number;
+  bedrooms: number;
+  bathrooms: number;
+  rating: string;
+  reviews_count: number;
+  is_featured: boolean;
+  distance: string | null;
+  distance_km: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  amenities: { id: number; name: string; icon: string }[];
+};
+
+//    Data
+
+function haversine(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 const experienceFilters = [
-  { id: "mountain", icon: "🏔", label: "Mountains" },
-  { id: "beach", icon: "🌊", label: "Beaches" },
-  { id: "forest", icon: "🌲", label: "Forests" },
-  { id: "valley", icon: "🏞️", label: "Valleys" },
-  { id: "wildlife", icon: "🦁", label: "Wildlife" },
-  { id: "heritage", icon: "🏛️", label: "Heritage" },
-  { id: "wellness", icon: "🍃", label: "Wellness" },
-  { id: "adventure", icon: "🚵", label: "Adventure" },
-  { id: "village", icon: "🏘️", label: "Village Life" },
-  { id: "rural", icon: "🌾", label: "Rural" },
+  { id: "mountain", icon: "???", label: "Mountains" },
+  { id: "beach", icon: "???", label: "Beaches" },
+  { id: "forest", icon: "??", label: "Forests" },
+  { id: "valley", icon: "???", label: "Valleys" },
+  { id: "wildlife", icon: "??", label: "Wildlife" },
+  { id: "heritage", icon: "???", label: "Heritage" },
+  { id: "wellness", icon: "?????", label: "Wellness" },
+  { id: "adventure", icon: "?????", label: "Adventure" },
+  { id: "village", icon: "???", label: "Village Life" },
+  { id: "rural", icon: "??", label: "Rural" },
 ];
 
-const amenityFilters = [
-  { id: "wifi", icon: <Wifi size={14} />, label: "Free Wi-Fi" },
-  { id: "pickup", icon: <Car size={14} />, label: "Pickup & Drop" },
-  { id: "meals", icon: <Utensils size={14} />, label: "Meals Included" },
-  { id: "eco", icon: <Leaf size={14} />, label: "Eco Friendly" },
-  { id: "mountain-view", icon: <Mountain size={14} />, label: "Mountain View" },
-  { id: "river", icon: <Waves size={14} />, label: "River Access" },
-  { id: "forest-walk", icon: <TreePine size={14} />, label: "Forest Walks" },
-  { id: "entire", icon: <HomeIcon size={14} />, label: "Entire Property" },
-];
-
-const sortOptions = [
-  { id: "recommended", label: "Recommended" },
-  { id: "price-low", label: "Price: Low to High" },
-  { id: "price-high", label: "Price: High to Low" },
-  { id: "rating", label: "Top Rated" },
-  { id: "newest", label: "Newest First" },
-];
-
-const stateOptions = [
-  "West Bengal",
-  "Kerala",
-  "Himachal Pradesh",
-  "Uttarakhand",
-  "Karnataka",
-  "Goa",
-  "Assam",
-  "Meghalaya",
-  "Sikkim",
-  "Rajasthan",
-  "Madhya Pradesh",
-  "Odisha",
-];
-
-const properties = [
-  {
-    id: 1,
-    name: "Lamahatta Mist Cottage",
-    location: "Lamahatta, Darjeeling",
-    state: "West Bengal",
-    type: "homestay",
-    experience: ["mountain", "forest"],
-    image: "/darjeeling.jpg",
-    price: 2200,
-    originalPrice: 2800,
-    rating: 4.9,
-    reviews: 128,
-    guests: 4,
-    bedrooms: 2,
-    amenities: ["wifi", "meals", "pickup", "mountain-view", "forest-walk"],
-    tag: "Hill Station · Tea Gardens",
-    badge: "Top Rated",
-    badgeColor: "#FECB19",
-    description:
-      "A cozy mountain cottage nestled in the pine forests above Darjeeling. Wake up to mist rolling through the valley, sip local Darjeeling tea on the verandah, and experience genuine Gorkha hospitality.",
-    host: "Pem Doma Tamang",
-    hostYears: 3,
-  },
-  {
-    id: 2,
-    name: "Sundarbans Delta Camp",
-    location: "Gosaba, Sundarbans",
-    state: "West Bengal",
-    type: "campsite",
-    experience: ["wildlife", "forest"],
-    image: "/sundarban.webp",
-    price: 1800,
-    originalPrice: null as number | null,
-    rating: 4.7,
-    reviews: 84,
-    guests: 6,
-    bedrooms: 3,
-    amenities: ["meals", "pickup", "eco", "river"],
-    tag: "Mangrove Forest · Tiger Reserve",
-    badge: "Eco Stay",
-    badgeColor: "#22c55e",
-    description:
-      "Deep in the world's largest mangrove delta, this riverside camp offers sunrise boat safaris, guided forest walks, and authentic Bengali village cuisine. Spot Bengal tigers in their natural habitat.",
-    host: "Subhash Mondal",
-    hostYears: 5,
-  },
-  {
-    id: 3,
-    name: "Dooars Forest Retreat",
-    location: "Gorumara, Dooars",
-    state: "West Bengal",
-    type: "eco-lodge",
-    experience: ["wildlife", "forest", "village"],
-    image: "/dooars.jpg",
-    price: 1600,
-    originalPrice: 2000 as number | null,
-    rating: 4.8,
-    reviews: 96,
-    guests: 4,
-    bedrooms: 2,
-    amenities: ["meals", "eco", "forest-walk", "river", "wifi"],
-    tag: "Tea Gardens · Elephant Safaris",
-    badge: "New",
-    badgeColor: "#6366f1",
-    description:
-      "A jungle-edge retreat at the foothills of the Himalayas. Fall asleep to elephant calls, explore the Gorumara National Park, and immerse in the culture of the tea garden communities.",
-    host: "Bikram Oraon",
-    hostYears: 2,
-  },
-  {
-    id: 4,
-    name: "Coorg Coffee Bungalow",
-    location: "Madikeri, Coorg",
-    state: "Karnataka",
-    type: "villa",
-    experience: ["forest", "wellness"],
-    image: "/corg.webp",
-    price: 3500,
-    originalPrice: 4200 as number | null,
-    rating: 4.9,
-    reviews: 213,
-    guests: 8,
-    bedrooms: 4,
-    amenities: ["wifi", "meals", "pickup", "entire"],
-    tag: "Coffee Estate · Waterfall Treks",
-    badge: "Top Rated",
-    badgeColor: "#FECB19",
-    description:
-      "A colonial-era planter's bungalow in the heart of a working coffee and pepper estate. Guided estate tours, waterfall hikes, and slow mornings with freshly brewed single-origin coffee.",
-    host: "Kavitha Cariappa",
-    hostYears: 7,
-  },
-  {
-    id: 5,
-    name: "Spiti Monastery Homestay",
-    location: "Kaza, Spiti Valley",
-    state: "Himachal Pradesh",
-    type: "homestay",
-    experience: ["mountain", "heritage", "adventure"],
-    image: "/spiti.avif",
-    price: 2800,
-    originalPrice: null as number | null,
-    rating: 4.8,
-    reviews: 72,
-    guests: 3,
-    bedrooms: 2,
-    amenities: ["meals", "mountain-view", "pickup"],
-    tag: "Desert Mountain · Monasteries",
-    badge: "Offbeat Pick",
-    badgeColor: "#f97316",
-    description:
-      "Stay with a local family in the shadow of ancient Buddhist monasteries. The highest inhabited plateau on Earth offers the most dramatic landscapes you'll ever see — and the warmest hosts.",
-    host: "Tenzin Wangchuk",
-    hostYears: 4,
-  },
-  {
-    id: 6,
-    name: "Munnar Mist Villa",
-    location: "Top Station, Munnar",
-    state: "Kerala",
-    type: "villa",
-    experience: ["mountain", "wellness", "forest"],
-    image: "/munnar.jpg",
-    price: 2400,
-    originalPrice: 3000 as number | null,
-    rating: 4.7,
-    reviews: 156,
-    guests: 6,
-    bedrooms: 3,
-    amenities: ["wifi", "meals", "eco", "mountain-view", "forest-walk"],
-    tag: "Tea Plantations · Ayurveda",
-    badge: null as string | null,
-    badgeColor: null as string | null,
-    description:
-      "A secluded villa perched at 2,000m with uninterrupted views over Kerala's most famous tea valley. Enjoy Ayurvedic wellness treatments, plantation walks, and home-cooked Kerala meals.",
-    host: "Jijo Thomas",
-    hostYears: 6,
-  },
-  {
-    id: 7,
-    name: "Chopta Alpine Camp",
-    location: "Chopta, Kedarnath Wildlife Sanctuary",
-    state: "Uttarakhand",
-    type: "campsite",
-    experience: ["mountain", "adventure", "wildlife"],
-    image: "/chopta.jpg",
-    price: 1500,
-    originalPrice: null as number | null,
-    rating: 4.6,
-    reviews: 48,
-    guests: 4,
-    bedrooms: 2,
-    amenities: ["meals", "mountain-view", "eco"],
-    tag: "Alpine Meadows · Himalayan Treks",
-    badge: "Adventure Pick",
-    badgeColor: "#ef4444",
-    description:
-      "Camp at 2,700m in India's 'Mini Switzerland' — a government-declared eco-zone. Trek to Tungnath temple, India's highest Shiva shrine, and watch the Himalayas turn pink at sunrise.",
-    host: "Deepak Rawat",
-    hostYears: 3,
-  },
-  {
-    id: 8,
-    name: "Goa Village Farmstay",
-    location: "Ponda, Goa Hinterland",
-    state: "Goa",
-    type: "farmstay",
-    experience: ["village", "rural", "wellness"],
-    image: "/goa.avif",
-    price: 2600,
-    originalPrice: 3100 as number | null,
-    rating: 4.8,
-    reviews: 194,
-    guests: 5,
-    bedrooms: 3,
-    amenities: ["wifi", "meals", "eco", "entire", "river"],
-    tag: "Spice Farms · Village Life",
-    badge: null as string | null,
-    badgeColor: null as string | null,
-    description:
-      "Escape Goa's tourist trail and discover the real Goa — a world of spice plantations, village festivals, and century-old homes. Guided spice tours, local cooking classes, and river kayaking.",
-    host: "Maria Fernandes",
-    hostYears: 5,
-  },
-];
-
-type Property = (typeof properties)[0];
-
-// ─── Property Card ────────────────────────────────────────────────────────────
+//    Property Card
 
 function PropertyCard({
   property,
-  onSelect,
+  userCoords,
+  dateRange,
 }: {
-  property: Property;
-  onSelect: (p: Property) => void;
+  property: ApiProperty;
+  userCoords: { lat: number; lng: number } | null;
+  dateRange?: DateRange;
 }) {
+  const router = useRouter();
+  const [imgIdx, setImgIdx] = useState(0);
   const [wishlisted, setWishlisted] = useState(false);
+
+  const rawImages: string[] = Array.isArray(property.images)
+    ? property.images
+    : [];
+  const allImages = [
+    ...new Set([property.image, ...rawImages].map(resolveImg).filter(Boolean)),
+  ].slice(0, 6);
+
+  // Distance from user
+  let distKm: number | null = property.distance_km ?? null;
+  if (
+    distKm === null &&
+    userCoords &&
+    property.latitude != null &&
+    property.longitude != null
+  ) {
+    distKm = haversine(
+      userCoords.lat,
+      userCoords.lng,
+      property.latitude,
+      property.longitude,
+    );
+  }
+
+  // Nights from selected dates
+  const nights =
+    dateRange?.from && dateRange?.to
+      ? Math.round(
+          (dateRange.to.getTime() - dateRange.from.getTime()) / 86_400_000,
+        )
+      : 0;
+
+  const totalPrice = nights > 0 ? property.min_price * nights : null;
+  const ratingInt = Math.round(parseFloat(property.rating ?? "0"));
 
   return (
     <motion.div
-      className="group bg-white rounded-2xl overflow-hidden cursor-pointer"
+      className="group bg-white rounded-2xl overflow-hidden cursor-pointer w-full"
       style={{
         border: "1px solid #efefef",
         boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
       }}
       whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.12)" }}
       transition={{ duration: 0.2 }}
-      onClick={() => onSelect(property)}
+      onClick={() => router.push(`/listing/${property.id}`)}
     >
-      <div className="relative h-52 overflow-hidden">
+      {/* Image */}
+      <div className="card-img-area relative h-52 overflow-hidden">
         <Image
-          src={property.image}
+          src={allImages[imgIdx] || resolveImg(property.image)}
           alt={property.name}
           fill
           className="object-cover group-hover:scale-105 transition-transform duration-500"
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+          sizes="320px"
+          unoptimized
         />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 60%)",
-          }}
-        />
-        {property.badge && (
-          <div
-            className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-black"
-            style={{ background: property.badgeColor!, color: "#0A0A0A" }}
-          >
-            {property.badge}
-          </div>
-        )}
+
+        {/* Wishlist */}
         <button
-          className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center"
+          className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center z-10"
           style={{
             background: "rgba(255,255,255,0.9)",
             backdropFilter: "blur(8px)",
@@ -346,466 +178,215 @@ function PropertyCard({
             color={wishlisted ? "#ef4444" : "#666"}
           />
         </button>
-        <div className="absolute bottom-3 left-3">
-          <span className="text-white font-black text-lg">
-            ₹{property.price.toLocaleString("en-IN")}
-          </span>
-          <span className="text-white/70 text-xs"> /night</span>
-        </div>
-        {property.originalPrice && (
-          <div className="absolute bottom-3 right-3">
-            <span className="text-white/60 text-xs line-through">
-              ₹{property.originalPrice.toLocaleString("en-IN")}
-            </span>
-          </div>
+
+        {/* Multi-image navigation */}
+        {allImages.length > 1 && (
+          <>
+            <button
+              className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIdx((i) => (i - 1 + allImages.length) % allImages.length);
+              }}
+            >
+              <ChevronLeft size={14} color="#333" />
+            </button>
+            <button
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setImgIdx((i) => (i + 1) % allImages.length);
+              }}
+            >
+              <ChevronRight size={14} color="#333" />
+            </button>
+            <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+              {allImages.map((_, i) => (
+                <div
+                  key={i}
+                  className={`rounded-full transition-all duration-200 ${
+                    i === imgIdx
+                      ? "w-4 h-1.5 bg-white"
+                      : "w-1.5 h-1.5 bg-white/60"
+                  }`}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
 
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <h3 className="font-black text-gray-900 text-base leading-tight">
-            {property.name}
-          </h3>
-          <div className="flex items-center gap-1 shrink-0">
-            <Star size={13} fill="#FECB19" color="#FECB19" />
-            <span className="text-sm font-bold text-gray-800">
-              {property.rating}
+      {/* Body */}
+      <div className="p-3.5">
+        {/* Name */}
+        <h3 className="font-black text-gray-900 text-[15px] leading-snug mb-0.5 line-clamp-1">
+          {property.name}
+        </h3>
+
+        {/* City, State � distance */}
+        <p className="text-xs text-gray-500 mb-2.5">
+          {property.city}, {property.state}
+          {distKm !== null && (
+            <span className="text-gray-400">
+              {" "}
+              &middot; {Math.round(distKm)} km away
             </span>
-            <span className="text-xs text-gray-400">({property.reviews})</span>
-          </div>
-        </div>
-        <p className="text-xs text-gray-500 flex items-center gap-1 mb-3">
-          <MapPin size={11} /> {property.location}
+          )}
         </p>
-        <p className="text-xs text-gray-500 mb-3 line-clamp-2 leading-relaxed">
-          {property.tag}
-        </p>
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          {property.amenities.slice(0, 4).map((a) => {
-            const amenity = amenityFilters.find((af) => af.id === a);
-            return amenity ? (
+
+        {/* Amenities */}
+        {property.amenities.length > 0 && (
+          <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+            {property.amenities.slice(0, 4).map((a) => (
               <span
-                key={a}
-                className="flex items-center gap-1 text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-full"
-                style={{ border: "1px solid #f0f0f0" }}
+                key={a.id}
+                className="text-[11px] text-gray-500 px-2 py-0.5 rounded-full shrink-0"
+                style={{ background: "#f5f5f5", border: "1px solid #eeeeee" }}
               >
-                <span style={{ color: "#FECB19" }}>{amenity.icon}</span>
-                {amenity.label}
+                {a.name}
               </span>
-            ) : null;
-          })}
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-500">
-            {property.bedrooms} bed · {property.guests} guests
+            ))}
+            {property.amenities.length > 4 && (
+              <span className="text-[11px] text-gray-400 font-medium">
+                + {property.amenities.length - 4} more
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Guests � Bedrooms � Bathrooms */}
+        {(property.max_guests > 0 ||
+          property.bedrooms > 0 ||
+          property.bathrooms > 0) && (
+          <p className="text-xs font-semibold text-gray-700 mb-2">
+            {property.max_guests > 0 && <>{property.max_guests} Guests</>}
+            {property.max_guests > 0 && property.bedrooms > 0 && <>&middot;</>}
+            {property.bedrooms > 0 && <>{property.bedrooms} Bedrooms</>}
+            {property.bedrooms > 0 && property.bathrooms > 0 && <>&middot;</>}
+            {property.bathrooms > 0 && <>{property.bathrooms} Bathrooms</>}
+          </p>
+        )}
+
+        {/* Stars + reviews */}
+        <div className="flex items-center gap-0.5 mb-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Star
+              key={i}
+              size={13}
+              fill={i < ratingInt ? "#FECB19" : "none"}
+              color={i < ratingInt ? "#FECB19" : "#d1d5db"}
+              strokeWidth={1.5}
+            />
+          ))}
+          <span className="text-xs font-bold text-gray-800 ml-1">
+            {property.rating}
           </span>
-          <button
-            className="flex items-center gap-1 text-xs font-black px-3 py-1.5 rounded-full hover:-translate-y-0.5 transition-transform"
-            style={{
-              background: "linear-gradient(135deg,#FECB19,#F95622)",
-              color: "#0A0A0A",
-            }}
-          >
-            View <ArrowRight size={12} />
-          </button>
+          <span className="text-xs text-gray-400 ml-1">
+            &middot; {property.reviews_count} reviews
+          </span>
+        </div>
+
+        {/* Pricing */}
+        <div
+          className="flex items-start justify-between pt-2.5"
+          style={{ borderTop: "1px solid #f0f0f0" }}
+        >
+          <div>
+            <p className="text-[11px] text-gray-400 leading-none mb-0.5">
+              Starting from
+            </p>
+            <p className="text-lg font-black text-gray-900 leading-tight">
+              &#8377;
+              {(totalPrice ?? property.min_price).toLocaleString("en-IN", {
+                minimumFractionDigits: 2,
+              })}
+            </p>
+          </div>
+          <div className="text-right">
+            {nights > 0 ? (
+              <>
+                <p className="text-[11px] text-gray-400 leading-snug">
+                  For {nights} Nights + Taxes
+                </p>
+                <p className="text-[11px] text-gray-400 leading-snug">
+                  &#8377;{property.min_price.toLocaleString("en-IN")} per night
+                </p>
+              </>
+            ) : (
+              <p className="text-[11px] text-gray-400 leading-snug mt-4">
+                per night
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
   );
 }
 
-// ─── Property Modal ───────────────────────────────────────────────────────────
+//    Section Row
 
-function PropertyModal({
-  property,
-  onClose,
+function SectionRow({
+  title,
+  subtitle,
+  properties,
+  loading,
+  userCoords,
+  dateRange,
 }: {
-  property: Property;
-  onClose: () => void;
+  title: string;
+  subtitle: string;
+  properties: ApiProperty[];
+  loading: boolean;
+  userCoords: { lat: number; lng: number } | null;
+  dateRange?: DateRange;
 }) {
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [adults, setAdults] = useState(2);
-  const [children, setChildren] = useState(0);
-  const [showGuestPicker, setShowGuestPicker] = useState(false);
-  const [wishlisted, setWishlisted] = useState(false);
-
-  const nights =
-    checkIn && checkOut
-      ? Math.max(
-          0,
-          Math.round(
-            (new Date(checkOut).getTime() - new Date(checkIn).getTime()) /
-              86400000,
-          ),
-        )
-      : 0;
-  const total = nights * property.price;
+  if (!loading && properties.length === 0) return null;
 
   return (
-    <motion.div
-      className="fixed inset-0 z-100 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-    >
-      <div
-        className="absolute inset-0"
-        style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
-      />
-      <motion.div
-        className="relative w-full sm:max-w-3xl max-h-[92vh] sm:max-h-[88vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-white"
-        initial={{ y: 80, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 80, opacity: 0 }}
-        transition={{ type: "spring", damping: 28, stiffness: 280 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Hero image */}
-        <div className="relative h-64 sm:h-80 shrink-0">
-          <Image
-            src={property.image}
-            alt={property.name}
-            fill
-            className="object-cover"
-            sizes="800px"
-            priority
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)",
-            }}
-          />
-          <button
-            onClick={onClose}
-            className="absolute top-4 left-4 w-9 h-9 rounded-full flex items-center justify-center"
-            style={{
-              background: "rgba(0,0,0,0.5)",
-              backdropFilter: "blur(8px)",
-            }}
-          >
-            <X size={18} color="#fff" />
-          </button>
-          <div className="absolute top-4 right-4 flex gap-2">
-            <button
-              onClick={() => setWishlisted(!wishlisted)}
-              className="w-9 h-9 rounded-full flex items-center justify-center"
-              style={{
-                background: "rgba(0,0,0,0.5)",
-                backdropFilter: "blur(8px)",
-              }}
-            >
-              <Heart
-                size={16}
-                fill={wishlisted ? "#ef4444" : "none"}
-                color={wishlisted ? "#ef4444" : "#fff"}
-              />
-            </button>
-            <button
-              className="w-9 h-9 rounded-full flex items-center justify-center"
-              style={{
-                background: "rgba(0,0,0,0.5)",
-                backdropFilter: "blur(8px)",
-              }}
-            >
-              <Share2 size={16} color="#fff" />
-            </button>
+    <section className="py-10">
+      <div className="container">
+        <div className="flex items-end justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-black text-gray-900 mb-1">{title}</h2>
+            <p className="text-sm text-gray-500">{subtitle}</p>
           </div>
-          <div className="absolute bottom-4 left-5">
-            <p className="text-white font-black text-2xl">
-              ₹{property.price.toLocaleString("en-IN")}
-              <span className="text-sm font-medium text-white/70"> /night</span>
-            </p>
-            {property.originalPrice && (
-              <p className="text-white/50 text-sm line-through">
-                ₹{property.originalPrice.toLocaleString("en-IN")}
-              </p>
-            )}
-          </div>
-          {property.badge && (
-            <div
-              className="absolute bottom-4 right-5 px-3 py-1 rounded-full text-xs font-black"
-              style={{ background: property.badgeColor!, color: "#0A0A0A" }}
+          {properties.length > 0 && (
+            <button
+              className="flex items-center gap-1.5 text-sm font-bold hover:gap-2.5 transition-all"
+              style={{ color: "#F95622" }}
             >
-              {property.badge}
-            </div>
+              See all <ArrowRight size={15} />
+            </button>
           )}
         </div>
-
-        {/* Content */}
-        <div className="p-5 sm:p-7">
-          <div className="flex items-start justify-between gap-4 mb-2">
-            <h2 className="text-2xl font-black text-gray-900 leading-tight">
-              {property.name}
-            </h2>
-            <div className="flex items-center gap-1.5 shrink-0 mt-1">
-              <Star size={16} fill="#FECB19" color="#FECB19" />
-              <span className="font-black text-gray-900">
-                {property.rating}
-              </span>
-              <span className="text-sm text-gray-400">
-                ({property.reviews} reviews)
-              </span>
-            </div>
-          </div>
-          <p className="text-gray-500 text-sm flex items-center gap-1.5 mb-4">
-            <MapPin size={13} /> {property.location}, {property.state}
-          </p>
-
-          {/* Stats row */}
-          <div
-            className="flex items-center gap-4 p-4 rounded-2xl mb-6"
-            style={{ background: "#F1EFEA" }}
-          >
-            {[
-              { label: "Bedrooms", value: `${property.bedrooms} rooms` },
-              { label: "Max guests", value: `${property.guests} people` },
-              {
-                label: "Type",
-                value:
-                  propertyTypeFilters.find((t) => t.id === property.type)
-                    ?.label ?? property.type,
-              },
-            ].map((s) => (
-              <div key={s.label} className="text-center flex-1">
-                <p className="font-black text-gray-900 text-sm">{s.value}</p>
-                <p className="text-xs text-gray-500">{s.label}</p>
-              </div>
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-96 rounded-2xl bg-gray-100 animate-pulse"
+              />
             ))}
           </div>
-
-          <h3 className="font-black text-gray-900 mb-2">About this stay</h3>
-          <p className="text-gray-600 text-sm leading-relaxed mb-6">
-            {property.description}
-          </p>
-
-          <h3 className="font-black text-gray-900 mb-3">
-            What&apos;s included
-          </h3>
-          <div className="flex flex-wrap gap-2 mb-6">
-            {property.amenities.map((a) => {
-              const amenity = amenityFilters.find((af) => af.id === a);
-              return amenity ? (
-                <span
-                  key={a}
-                  className="flex items-center gap-1.5 text-sm text-gray-700 px-3 py-1.5 rounded-full"
-                  style={{ background: "#F1EFEA", border: "1px solid #e8e5df" }}
-                >
-                  <CheckCircle2 size={13} style={{ color: "#22c55e" }} />
-                  {amenity.label}
-                </span>
-              ) : null;
-            })}
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+            {properties.map((p) => (
+              <PropertyCard
+                key={p.id}
+                property={p}
+                userCoords={userCoords}
+                dateRange={dateRange}
+              />
+            ))}
           </div>
-
-          {/* Host */}
-          <div
-            className="flex items-center gap-3 p-4 rounded-2xl mb-6"
-            style={{ border: "1px solid #efefef" }}
-          >
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
-              style={{ background: "#F1EFEA" }}
-            >
-              👤
-            </div>
-            <div>
-              <p className="font-black text-gray-900">
-                Hosted by {property.host}
-              </p>
-              <p className="text-sm text-gray-500">
-                {property.hostYears} years hosting on Bayaroo
-              </p>
-            </div>
-          </div>
-
-          {/* Booking widget */}
-          <div className="rounded-2xl p-5" style={{ background: "#0A0A0A" }}>
-            <h3 className="font-black text-white mb-4">Check availability</h3>
-            <div className="grid grid-cols-2 gap-3 mb-3">
-              <div>
-                <label
-                  className="text-xs font-bold mb-1.5 block"
-                  style={{ color: "rgba(255,255,255,0.5)" }}
-                >
-                  CHECK-IN
-                </label>
-                <input
-                  type="date"
-                  value={checkIn}
-                  min={new Date().toISOString().split("T")[0]}
-                  onChange={(e) => setCheckIn(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-white outline-none"
-                  style={{
-                    background: "rgba(255,255,255,0.1)",
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    colorScheme: "dark",
-                  }}
-                />
-              </div>
-              <div>
-                <label
-                  className="text-xs font-bold mb-1.5 block"
-                  style={{ color: "rgba(255,255,255,0.5)" }}
-                >
-                  CHECK-OUT
-                </label>
-                <input
-                  type="date"
-                  value={checkOut}
-                  min={checkIn || new Date().toISOString().split("T")[0]}
-                  onChange={(e) => setCheckOut(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-white outline-none"
-                  style={{
-                    background: "rgba(255,255,255,0.1)",
-                    border: "1px solid rgba(255,255,255,0.15)",
-                    colorScheme: "dark",
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label
-                className="text-xs font-bold mb-1.5 block"
-                style={{ color: "rgba(255,255,255,0.5)" }}
-              >
-                GUESTS
-              </label>
-              <button
-                className="w-full px-3 py-2.5 rounded-xl text-sm font-semibold text-white flex items-center justify-between"
-                style={{
-                  background: "rgba(255,255,255,0.1)",
-                  border: "1px solid rgba(255,255,255,0.15)",
-                }}
-                onClick={() => setShowGuestPicker(!showGuestPicker)}
-              >
-                <span>
-                  {adults} adult{adults !== 1 ? "s" : ""}
-                  {children > 0
-                    ? `, ${children} child${children !== 1 ? "ren" : ""}`
-                    : ""}
-                </span>
-                <ChevronDown
-                  size={14}
-                  className={`transition-transform ${showGuestPicker ? "rotate-180" : ""}`}
-                />
-              </button>
-              <AnimatePresence>
-                {showGuestPicker && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div
-                      className="mt-2 p-3 rounded-xl"
-                      style={{
-                        background: "rgba(255,255,255,0.07)",
-                        border: "1px solid rgba(255,255,255,0.1)",
-                      }}
-                    >
-                      {[
-                        {
-                          label: "Adults",
-                          sub: "Age 13+",
-                          val: adults,
-                          set: setAdults,
-                          min: 1,
-                        },
-                        {
-                          label: "Children",
-                          sub: "Age 2–12",
-                          val: children,
-                          set: setChildren,
-                          min: 0,
-                        },
-                      ].map(({ label, sub, val, set, min }) => (
-                        <div
-                          key={label}
-                          className="flex items-center justify-between py-2"
-                        >
-                          <div>
-                            <p className="text-sm font-bold text-white">
-                              {label}
-                            </p>
-                            <p
-                              className="text-xs"
-                              style={{ color: "rgba(255,255,255,0.4)" }}
-                            >
-                              {sub}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={() => set(Math.max(min, val - 1))}
-                              className="w-7 h-7 rounded-full flex items-center justify-center"
-                              style={{ background: "rgba(255,255,255,0.12)" }}
-                            >
-                              <Minus size={12} color="#fff" />
-                            </button>
-                            <span className="text-white font-black w-4 text-center">
-                              {val}
-                            </span>
-                            <button
-                              onClick={() => set(val + 1)}
-                              className="w-7 h-7 rounded-full flex items-center justify-center"
-                              style={{ background: "rgba(255,255,255,0.12)" }}
-                            >
-                              <Plus size={12} color="#fff" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {nights > 0 && (
-              <div className="flex items-center justify-between mb-4 px-1">
-                <p
-                  className="text-sm"
-                  style={{ color: "rgba(255,255,255,0.6)" }}
-                >
-                  ₹{property.price.toLocaleString("en-IN")} × {nights} night
-                  {nights !== 1 ? "s" : ""}
-                </p>
-                <p className="font-black text-white">
-                  ₹{total.toLocaleString("en-IN")}
-                </p>
-              </div>
-            )}
-
-            <Link
-              href="/download"
-              className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-black text-sm hover:opacity-90 transition-opacity"
-              style={{
-                background: "linear-gradient(135deg,#FECB19,#F95622)",
-                color: "#0A0A0A",
-              }}
-            >
-              <Phone size={15} /> Book via Bayaroo App
-            </Link>
-            <p
-              className="text-center text-xs mt-2"
-              style={{ color: "rgba(255,255,255,0.35)" }}
-            >
-              Free cancellation available · No hidden charges
-            </p>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
+        )}
+      </div>
+    </section>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+//    Page
 
 export default function ExplorePage() {
   const [search, setSearch] = useState("");
@@ -817,84 +398,84 @@ export default function ExplorePage() {
     infants: 0,
     pets: 0,
   });
-  const [activeTypes, setActiveTypes] = useState<string[]>([]);
   const [activeExperiences, setActiveExperiences] = useState<string[]>([]);
-  const [activeAmenities, setActiveAmenities] = useState<string[]>([]);
-  const [priceRange, setPriceRange] = useState<[number, number]>([500, 10000]);
-  const [sortBy, setSortBy] = useState("recommended");
-  const [showSortDropdown, setShowSortDropdown] = useState(false);
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(
-    null,
-  );
+  // API states
+  const [states, setStates] = useState<{ id: number; name: string }[]>([]);
 
-  const toggleFilter = (
-    arr: string[],
-    setArr: (v: string[]) => void,
-    id: string,
-  ) => setArr(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
+  const [userCoords, setUserCoords] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
 
-  const activeFilterCount =
-    activeTypes.length +
-    activeExperiences.length +
-    activeAmenities.length +
-    (selectedState ? 1 : 0) +
-    (priceRange[0] > 500 || priceRange[1] < 10000 ? 1 : 0);
+  // Section data
+  const [nearbyProps, setNearbyProps] = useState<ApiProperty[]>([]);
+  const [featuredProps, setFeaturedProps] = useState<ApiProperty[]>([]);
+  const [honeymoonProps, setHoneymoonProps] = useState<ApiProperty[]>([]);
+  const [mountainProps, setMountainProps] = useState<ApiProperty[]>([]);
+  const [loadingNearby, setLoadingNearby] = useState(true);
+  const [loadingFeatured, setLoadingFeatured] = useState(true);
+  const [loadingHoneymoon, setLoadingHoneymoon] = useState(true);
+  const [loadingMountain, setLoadingMountain] = useState(true);
 
-  const filteredProperties = useMemo(() => {
-    let list = [...properties];
-    if (search)
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          p.location.toLowerCase().includes(search.toLowerCase()) ||
-          p.state.toLowerCase().includes(search.toLowerCase()),
+  useEffect(() => {
+    // States for dropdown
+    fetch(`${API_BASE}/states`)
+      .then((r) => r.json())
+      .then((data) => setStates(data.states ?? []))
+      .catch(() => {});
+
+    // Featured / Explore Places
+    fetch(`${API_BASE}/properties?is_featured=1&per_page=10`)
+      .then((r) => r.json())
+      .then((data) => setFeaturedProps(data.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingFeatured(false));
+
+    // Honeymoon Couples
+    fetch(`${API_BASE}/properties?experience_types[]=honeymoon&per_page=10`)
+      .then((r) => r.json())
+      .then((data) => setHoneymoonProps(data.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingHoneymoon(false));
+
+    // Mountain Lovers
+    fetch(`${API_BASE}/properties?experience_types[]=mountain&per_page=10`)
+      .then((r) => r.json())
+      .then((data) => setMountainProps(data.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoadingMountain(false));
+
+    // Spaces Near You — requires geolocation
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          setUserCoords({ lat: latitude, lng: longitude });
+          fetch(
+            `${API_BASE}/properties?latitude=${latitude}&longitude=${longitude}&radius=50&per_page=10`,
+          )
+            .then((r) => r.json())
+            .then((data) => setNearbyProps(data.data ?? []))
+            .catch(() => {})
+            .finally(() => setLoadingNearby(false));
+        },
+        () => setLoadingNearby(false),
       );
-    if (selectedState) list = list.filter((p) => p.state === selectedState);
-    if (activeTypes.length)
-      list = list.filter((p) => activeTypes.includes(p.type));
-    if (activeExperiences.length)
-      list = list.filter((p) =>
-        p.experience.some((e) => activeExperiences.includes(e)),
-      );
-    if (activeAmenities.length)
-      list = list.filter((p) =>
-        activeAmenities.every((a) => p.amenities.includes(a)),
-      );
-    list = list.filter(
-      (p) => p.price >= priceRange[0] && p.price <= priceRange[1],
+    } else {
+      setLoadingNearby(false);
+    }
+  }, []);
+
+  const toggleExperience = (id: string) =>
+    setActiveExperiences((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
-    if (sortBy === "price-low") list.sort((a, b) => a.price - b.price);
-    else if (sortBy === "price-high") list.sort((a, b) => b.price - a.price);
-    else if (sortBy === "rating") list.sort((a, b) => b.rating - a.rating);
-    return list;
-  }, [
-    search,
-    selectedState,
-    activeTypes,
-    activeExperiences,
-    activeAmenities,
-    priceRange,
-    sortBy,
-  ]);
-
-  const clearAllFilters = () => {
-    setSearch("");
-    setSelectedState("");
-    setDateRange(undefined);
-    setGuestCounts({ adults: 1, children: 0, infants: 0, pets: 0 });
-    setActiveTypes([]);
-    setActiveExperiences([]);
-    setActiveAmenities([]);
-    setPriceRange([500, 10000]);
-    setSortBy("recommended");
-  };
 
   return (
     <>
       <Navbar />
 
-      {/* ── Hero with video background + search ───────────────── */}
+      {/*   Hero with video background + search           */}
       <section
         className="relative flex flex-col items-center justify-center overflow-hidden"
         style={{ minHeight: "88vh", paddingTop: "5rem" }}
@@ -968,7 +549,7 @@ export default function ExplorePage() {
             budget, and vibe.
           </motion.p>
 
-          {/* ── Search bar ── */}
+          {/*   Search bar   */}
           <motion.div
             className="max-w-4xl mx-auto"
             initial={{ opacity: 0, y: 24 }}
@@ -1018,9 +599,13 @@ export default function ExplorePage() {
                 <option value="" style={{ background: "#1a1a1a" }}>
                   All States
                 </option>
-                {stateOptions.map((s) => (
-                  <option key={s} value={s} style={{ background: "#1a1a1a" }}>
-                    {s}
+                {states.map((s) => (
+                  <option
+                    key={s.id}
+                    value={s.name}
+                    style={{ background: "#1a1a1a" }}
+                  >
+                    {s.name}
                   </option>
                 ))}
               </select>
@@ -1049,9 +634,7 @@ export default function ExplorePage() {
               {experienceFilters.map((ef) => (
                 <button
                   key={ef.id}
-                  onClick={() =>
-                    toggleFilter(activeExperiences, setActiveExperiences, ef.id)
-                  }
+                  onClick={() => toggleExperience(ef.id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shrink-0 transition-all hover:scale-105"
                   style={
                     activeExperiences.includes(ef.id)
@@ -1072,223 +655,6 @@ export default function ExplorePage() {
                 </button>
               ))}
             </div>
-
-            {/* Advanced filters toggle */}
-            <div className="mt-3 flex justify-center">
-              <button
-                onClick={() => setShowFilterPanel(!showFilterPanel)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all hover:scale-105"
-                style={
-                  activeFilterCount > 0
-                    ? {
-                        background: "#FECB19",
-                        color: "#0A0A0A",
-                      }
-                    : {
-                        background: "rgba(255,255,255,0.12)",
-                        color: "rgba(255,255,255,0.75)",
-                        border: "1px solid rgba(255,255,255,0.2)",
-                        backdropFilter: "blur(8px)",
-                      }
-                }
-              >
-                <SlidersHorizontal size={13} />
-                {showFilterPanel ? "Hide filters" : "More filters"}
-                {activeFilterCount > 0 && (
-                  <span
-                    className="w-4 h-4 rounded-full text-xs font-black flex items-center justify-center"
-                    style={{ background: "#0A0A0A", color: "#FECB19" }}
-                  >
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Expandable advanced filter panel */}
-            <AnimatePresence>
-              {showFilterPanel && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden mt-3"
-                >
-                  <div
-                    className="p-5 rounded-2xl text-left"
-                    style={{
-                      background: "rgba(10,10,10,0.75)",
-                      backdropFilter: "blur(20px)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                    }}
-                  >
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                      {/* Property type */}
-                      <div>
-                        <p
-                          className="text-xs font-black uppercase tracking-widest mb-3"
-                          style={{ color: "rgba(255,255,255,0.4)" }}
-                        >
-                          Property Type
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {propertyTypeFilters.map((pt) => (
-                            <button
-                              key={pt.id}
-                              onClick={() =>
-                                toggleFilter(activeTypes, setActiveTypes, pt.id)
-                              }
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
-                              style={
-                                activeTypes.includes(pt.id)
-                                  ? {
-                                      background: "#FECB19",
-                                      color: "#0A0A0A",
-                                    }
-                                  : {
-                                      background: "rgba(255,255,255,0.08)",
-                                      color: "rgba(255,255,255,0.7)",
-                                      border:
-                                        "1px solid rgba(255,255,255,0.12)",
-                                    }
-                              }
-                            >
-                              {pt.emoji} {pt.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Amenities */}
-                      <div>
-                        <p
-                          className="text-xs font-black uppercase tracking-widest mb-3"
-                          style={{ color: "rgba(255,255,255,0.4)" }}
-                        >
-                          Amenities
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {amenityFilters.map((a) => (
-                            <button
-                              key={a.id}
-                              onClick={() =>
-                                toggleFilter(
-                                  activeAmenities,
-                                  setActiveAmenities,
-                                  a.id,
-                                )
-                              }
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
-                              style={
-                                activeAmenities.includes(a.id)
-                                  ? {
-                                      background: "#FECB19",
-                                      color: "#0A0A0A",
-                                    }
-                                  : {
-                                      background: "rgba(255,255,255,0.08)",
-                                      color: "rgba(255,255,255,0.7)",
-                                      border:
-                                        "1px solid rgba(255,255,255,0.12)",
-                                    }
-                              }
-                            >
-                              <span
-                                style={{
-                                  color: activeAmenities.includes(a.id)
-                                    ? "#0A0A0A"
-                                    : "#FECB19",
-                                }}
-                              >
-                                {a.icon}
-                              </span>
-                              {a.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Price */}
-                      <div>
-                        <p
-                          className="text-xs font-black uppercase tracking-widest mb-3"
-                          style={{ color: "rgba(255,255,255,0.4)" }}
-                        >
-                          Price per Night
-                        </p>
-                        <div className="flex gap-3">
-                          <div className="flex-1">
-                            <label
-                              className="text-xs mb-1 block"
-                              style={{ color: "rgba(255,255,255,0.35)" }}
-                            >
-                              Min ₹
-                            </label>
-                            <input
-                              type="number"
-                              value={priceRange[0]}
-                              min={500}
-                              max={priceRange[1]}
-                              step={100}
-                              onChange={(e) =>
-                                setPriceRange([+e.target.value, priceRange[1]])
-                              }
-                              className="w-full px-3 py-2 rounded-xl text-sm font-semibold text-white outline-none"
-                              style={{
-                                background: "rgba(255,255,255,0.1)",
-                                border: "1px solid rgba(255,255,255,0.15)",
-                                colorScheme: "dark",
-                              }}
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <label
-                              className="text-xs mb-1 block"
-                              style={{ color: "rgba(255,255,255,0.35)" }}
-                            >
-                              Max ₹
-                            </label>
-                            <input
-                              type="number"
-                              value={priceRange[1]}
-                              min={priceRange[0]}
-                              max={20000}
-                              step={100}
-                              onChange={(e) =>
-                                setPriceRange([priceRange[0], +e.target.value])
-                              }
-                              className="w-full px-3 py-2 rounded-xl text-sm font-semibold text-white outline-none"
-                              style={{
-                                background: "rgba(255,255,255,0.1)",
-                                border: "1px solid rgba(255,255,255,0.15)",
-                                colorScheme: "dark",
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Clear */}
-                      <div className="flex flex-col justify-end">
-                        {activeFilterCount > 0 && (
-                          <button
-                            onClick={clearAllFilters}
-                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-colors"
-                            style={{
-                              background: "rgba(239,68,68,0.15)",
-                              color: "#fca5a5",
-                              border: "1px solid rgba(239,68,68,0.25)",
-                            }}
-                          >
-                            <X size={14} /> Clear all ({activeFilterCount})
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </motion.div>
 
           {/* Trust stats */}
@@ -1319,156 +685,48 @@ export default function ExplorePage() {
         </div>
       </section>
 
-      {/* ── Main content ──────────────────────────────────────── */}
-      <main style={{ background: "#F8F7F4", minHeight: "100vh" }}>
-        <div className="container py-8">
-          {/* Results header */}
-          <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-            <div>
-              <p className="text-lg font-black text-gray-900">
-                {filteredProperties.length} propert
-                {filteredProperties.length !== 1 ? "ies" : "y"} found
-              </p>
-              {(search || selectedState || activeFilterCount > 0) && (
-                <p className="text-sm text-gray-500">
-                  {search ? `"${search}"` : ""}
-                  {selectedState ? ` in ${selectedState}` : ""}
-                  {activeFilterCount > 0
-                    ? ` · ${activeFilterCount} filter${activeFilterCount !== 1 ? "s" : ""} active`
-                    : ""}
-                </p>
-              )}
-            </div>
+      {/* --- Spaces Near You ---------------------------------------------- */}
+      <main style={{ background: "#F8F7F4" }}>
+        <SectionRow
+          title="Spaces Near You"
+          subtitle="Properties closest to your current location"
+          properties={nearbyProps}
+          loading={loadingNearby}
+          userCoords={userCoords}
+          dateRange={dateRange}
+        />
 
-            {/* Sort */}
-            <div className="relative">
-              <button
-                onClick={() => setShowSortDropdown(!showSortDropdown)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white"
-                style={{ border: "1px solid #e5e7eb" }}
-              >
-                <Filter size={14} style={{ color: "#F95622" }} />
-                {sortOptions.find((s) => s.id === sortBy)?.label}
-                <ChevronDown
-                  size={13}
-                  className={`transition-transform ${showSortDropdown ? "rotate-180" : ""}`}
-                />
-              </button>
-              <AnimatePresence>
-                {showSortDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
-                    className="absolute top-full mt-1 right-0 w-52 bg-white rounded-2xl shadow-2xl py-2 z-50"
-                    style={{ border: "1px solid #efefef" }}
-                  >
-                    {sortOptions.map((s) => (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          setSortBy(s.id);
-                          setShowSortDropdown(false);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-amber-50 transition-colors"
-                        style={{
-                          color: sortBy === s.id ? "#F95622" : "#374151",
-                          fontWeight: sortBy === s.id ? 800 : 500,
-                        }}
-                      >
-                        {sortBy === s.id && <span className="mr-1">✓</span>}
-                        {s.label}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
+        <SectionRow
+          title="Explore Places"
+          subtitle="Handpicked featured stays across India"
+          properties={featuredProps}
+          loading={loadingFeatured}
+          userCoords={userCoords}
+          dateRange={dateRange}
+        />
 
-          {/* Active filter chips */}
-          {activeFilterCount > 0 && (
-            <div className="flex flex-wrap gap-2 mb-5">
-              {activeTypes.map((id) => {
-                const t = propertyTypeFilters.find((x) => x.id === id)!;
-                return (
-                  <button
-                    key={id}
-                    onClick={() =>
-                      toggleFilter(activeTypes, setActiveTypes, id)
-                    }
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                    style={{ background: "#0A0A0A", color: "#FECB19" }}
-                  >
-                    {t.emoji} {t.label} <X size={11} />
-                  </button>
-                );
-              })}
-              {activeExperiences.map((id) => {
-                const e = experienceFilters.find((x) => x.id === id)!;
-                return (
-                  <button
-                    key={id}
-                    onClick={() =>
-                      toggleFilter(activeExperiences, setActiveExperiences, id)
-                    }
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                    style={{ background: "#0A0A0A", color: "#FECB19" }}
-                  >
-                    {e.icon} {e.label} <X size={11} />
-                  </button>
-                );
-              })}
-              {activeAmenities.map((id) => {
-                const a = amenityFilters.find((x) => x.id === id)!;
-                return (
-                  <button
-                    key={id}
-                    onClick={() =>
-                      toggleFilter(activeAmenities, setActiveAmenities, id)
-                    }
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
-                    style={{ background: "#0A0A0A", color: "#FECB19" }}
-                  >
-                    {a.label} <X size={11} />
-                  </button>
-                );
-              })}
-            </div>
-          )}
+        <SectionRow
+          title="Honeymoon Couples"
+          subtitle="Romantic escapes perfect for two"
+          properties={honeymoonProps}
+          loading={loadingHoneymoon}
+          userCoords={userCoords}
+          dateRange={dateRange}
+        />
 
-          {/* Property grid */}
-          {filteredProperties.length === 0 ? (
-            <div className="text-center py-24">
-              <div className="text-5xl mb-4">🔍</div>
-              <h3 className="text-xl font-black text-gray-900 mb-2">
-                No properties found
-              </h3>
-              <p className="text-gray-500 mb-6">
-                Try removing some filters or changing your search
-              </p>
-              <button onClick={clearAllFilters} className="btn-primary">
-                Clear all filters
-              </button>
-            </div>
-          ) : (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {filteredProperties.map((p, i) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05, duration: 0.35 }}
-                >
-                  <PropertyCard property={p} onSelect={setSelectedProperty} />
-                </motion.div>
-              ))}
-            </div>
-          )}
+        <SectionRow
+          title="Mountain Lovers"
+          subtitle="Breathtaking hill retreats and mountain getaways"
+          properties={mountainProps}
+          loading={loadingMountain}
+          userCoords={userCoords}
+          dateRange={dateRange}
+        />
 
-          {/* AI CTA banner */}
+        {/* AI CTA */}
+        <div className="container pb-16">
           <div
-            className="mt-16 rounded-3xl p-8 sm:p-12 flex flex-col sm:flex-row items-center justify-between gap-6"
+            className="rounded-3xl p-8 sm:p-12 flex flex-col sm:flex-row items-center justify-between gap-6"
             style={{ background: "#0A0A0A" }}
           >
             <div>
@@ -1509,16 +767,6 @@ export default function ExplorePage() {
       </main>
 
       <Footer />
-
-      {/* Property detail modal */}
-      <AnimatePresence>
-        {selectedProperty && (
-          <PropertyModal
-            property={selectedProperty}
-            onClose={() => setSelectedProperty(null)}
-          />
-        )}
-      </AnimatePresence>
     </>
   );
 }

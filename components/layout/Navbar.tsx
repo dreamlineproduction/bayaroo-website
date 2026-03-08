@@ -50,7 +50,7 @@ const navLinks = [
   { label: "Blog", href: "/blog" },
 ];
 
-export default function Navbar() {
+export default function Navbar({ forceDark = false }: { forceDark?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -61,10 +61,12 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const textCls = scrolled
+  const isDark = scrolled || forceDark;
+
+  const textCls = isDark
     ? "text-gray-700 hover:text-gray-900"
     : "text-white/80 hover:text-white";
-  const logoSrc = scrolled ? "/logo-dark.svg" : "/logo-white.svg";
+  const logoSrc = isDark ? "/logo-dark.svg" : "/logo-white.svg";
 
   return (
     <motion.header
@@ -73,7 +75,7 @@ export default function Navbar() {
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-400"
       style={
-        scrolled
+        isDark
           ? {
               background: "rgba(255,255,255,0.88)",
               backdropFilter: "blur(24px)",
@@ -88,7 +90,7 @@ export default function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center shrink-0">
             <Image
-              src={scrolled ? "/logo-color.svg" : "/logo.svg"}
+              src={isDark ? "/logo-color.svg" : "/logo.svg"}
               alt="Bayaroo"
               width={120}
               height={26}
@@ -156,7 +158,7 @@ export default function Navbar() {
               href="/download"
               className="text-sm font-bold px-5 py-2.5 rounded-full transition-all"
               style={
-                scrolled
+                isDark
                   ? { border: "2px solid #0A0A0A", color: "#0A0A0A" }
                   : { border: "2px solid rgba(255,255,255,0.3)", color: "#fff" }
               }
@@ -179,9 +181,9 @@ export default function Navbar() {
             aria-label="Toggle menu"
           >
             {menuOpen ? (
-              <X size={22} color={scrolled ? "#0A0A0A" : "#fff"} />
+              <X size={22} color={isDark ? "#0A0A0A" : "#fff"} />
             ) : (
-              <Menu size={22} color={scrolled ? "#0A0A0A" : "#fff"} />
+              <Menu size={22} color={isDark ? "#0A0A0A" : "#fff"} />
             )}
           </button>
         </div>
