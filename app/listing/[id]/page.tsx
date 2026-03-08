@@ -1749,7 +1749,7 @@ export default function ListingPage() {
             availabilityData &&
             availabilityData.available_rooms.length > 0 ? (
               <Link
-                href="/download"
+                href={`/select-rooms/${property?.id}?check_in=${format(selectedDates[0], "yyyy-MM-dd")}&check_out=${format(selectedDates[1], "yyyy-MM-dd")}&adults=${guests.adults}&children=${guests.children}&infants=${guests.infants}`}
                 className="font-black text-sm px-6 py-3.5 rounded-full hover:opacity-90 transition-opacity shrink-0"
                 style={{
                   background: "linear-gradient(135deg,#FECB19,#F95622)",
