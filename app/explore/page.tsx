@@ -147,7 +147,7 @@ function PropertyCard({
       }}
       whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(0,0,0,0.12)" }}
       transition={{ duration: 0.2 }}
-      onClick={() => router.push(`/listing/${property.id}`)}
+      onClick={() => window.open(`/listing/${property.id}`, "_blank")}
     >
       {/* Image */}
       <div className="card-img-area relative h-52 overflow-hidden">

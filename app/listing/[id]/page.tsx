@@ -24,6 +24,7 @@ import {
 import { format, differenceInCalendarDays } from "date-fns";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import { getTablerIcon, getAttractionIcon } from "@/utils/iconMapper";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 const STORAGE_BASE = API_BASE.replace(/\/api$/, "");
@@ -792,7 +793,7 @@ export default function ListingPage() {
       <div className="container max-w-4xl py-6 pb-36">
         <div
           className="bg-white rounded-3xl p-6 sm:p-8"
-          style={{ marginTop: "1rem" }}
+          style={{ marginTop: "1rem", marginBottom: "14rem" }}
         >
           {/* Property header */}
           <div className="mb-6">
@@ -985,11 +986,9 @@ export default function ListingPage() {
                         border: "1px solid #efefef",
                       }}
                     >
-                      <CheckCircle2
-                        size={15}
-                        style={{ color: "#22c55e" }}
-                        className="shrink-0"
-                      />
+                      <span className="shrink-0 text-gray-500">
+                        {getTablerIcon(a.icon, 17, 1.5)}
+                      </span>
                       <span className="text-sm font-medium text-gray-700">
                         {a.name}
                       </span>
@@ -1027,11 +1026,12 @@ export default function ListingPage() {
                         border: "1px solid #efefef",
                       }}
                     >
-                      <MapPin
-                        size={15}
-                        style={{ color: "#F95622" }}
+                      <span
                         className="shrink-0 mt-0.5"
-                      />
+                        style={{ color: "#F95622" }}
+                      >
+                        {getAttractionIcon(a.icon, 16, 1.5)}
+                      </span>
                       <div>
                         <span className="text-sm font-medium text-gray-700">
                           {a.name}
@@ -1829,11 +1829,9 @@ export default function ListingPage() {
                         border: "1px solid #efefef",
                       }}
                     >
-                      <CheckCircle2
-                        size={15}
-                        style={{ color: "#22c55e" }}
-                        className="shrink-0"
-                      />
+                      <span className="shrink-0 text-gray-500">
+                        {getTablerIcon(a.icon, 17, 1.5)}
+                      </span>
                       <span className="text-sm font-medium text-gray-700">
                         {a.name}
                       </span>
@@ -1897,11 +1895,12 @@ export default function ListingPage() {
                         border: "1px solid #efefef",
                       }}
                     >
-                      <MapPin
-                        size={16}
-                        style={{ color: "#F95622" }}
+                      <span
                         className="shrink-0 mt-0.5"
-                      />
+                        style={{ color: "#F95622" }}
+                      >
+                        {getAttractionIcon(a.icon, 16, 1.5)}
+                      </span>
                       <div className="flex-1">
                         <p className="font-bold text-gray-900 text-sm">
                           {a.name}

@@ -117,6 +117,142 @@ interface SelectedRoomData {
   };
 }
 
+// ─── Calendar Widget ─────────────────────────────────────────────────────────────
+
+const CAL_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function InlineCalendar({
+  currentMonth,
+  selectedDates,
+  onDateClick,
+  onMonthChange,
+}: {
+  currentMonth: Date;
+  selectedDates: Date[];
+  onDateClick: (day: number) => void;
+  onMonthChange: (inc: boolean) => void;
+}) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+  const firstDayOfWeek = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthLabel = currentMonth.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const isPast = (day: number) => {
+    const d = new Date(year, month, day);
+    d.setHours(0, 0, 0, 0);
+    return d < today;
+  };
+
+  const isSelected = (day: number) => {
+    if (selectedDates.length === 0) return false;
+    const d = new Date(year, month, day);
+    return selectedDates.some((s) => s.getTime() === d.getTime());
+  };
+
+  const isInRange = (day: number) => {
+    if (selectedDates.length !== 2) return false;
+    const d = new Date(year, month, day);
+    return d > selectedDates[0] && d < selectedDates[1];
+  };
+
+  const isStart = (day: number) =>
+    selectedDates.length >= 1 &&
+    new Date(year, month, day).getTime() === selectedDates[0].getTime();
+
+  const isEnd = (day: number) =>
+    selectedDates.length === 2 &&
+    new Date(year, month, day).getTime() === selectedDates[1].getTime();
+
+  return (
+    <div>
+      {/* Month navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => onMonthChange(false)}
+          className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-50 transition-colors"
+          style={{ border: "1px solid #e5e7eb" }}
+        >
+          <ChevronLeft size={15} color="#555" />
+        </button>
+        <span className="font-bold text-sm text-gray-900">{monthLabel}</span>
+        <button
+          onClick={() => onMonthChange(true)}
+          className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-50 transition-colors"
+          style={{ border: "1px solid #e5e7eb" }}
+        >
+          <ChevronRight size={15} color="#555" />
+        </button>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {CAL_DAY_NAMES.map((d) => (
+          <div
+            key={d}
+            className="text-center text-[10px] font-semibold text-gray-400 py-1"
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {/* Date grid */}
+      <div className="grid grid-cols-7">
+        {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+          <div key={`e${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }).map((_, idx) => {
+          const day = idx + 1;
+          const disabled = isPast(day);
+          const selected = isSelected(day);
+          const inRange = isInRange(day);
+          const start = isStart(day);
+          const end = isEnd(day);
+          const hasRange = selectedDates.length === 2;
+          return (
+            <div
+              key={day}
+              onClick={() => !disabled && onDateClick(day)}
+              className="relative flex items-center justify-center"
+              style={{ height: "38px" }}
+            >
+              {(inRange || (start && hasRange) || (end && hasRange)) && (
+                <div
+                  className="absolute inset-y-1"
+                  style={{
+                    background: "rgba(254,203,25,0.18)",
+                    left: start ? "50%" : 0,
+                    right: end ? "50%" : 0,
+                  }}
+                />
+              )}
+              <span
+                className={`relative z-10 w-8 h-8 flex items-center justify-center rounded-xl text-xs font-semibold transition-colors ${
+                  selected
+                    ? "bg-gray-900 text-white"
+                    : inRange
+                      ? "text-gray-800"
+                      : disabled
+                        ? "text-gray-300"
+                        : "text-gray-900 hover:bg-gray-100 cursor-pointer"
+                }`}
+              >
+                {day}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SelectRoomsPage() {
@@ -154,6 +290,17 @@ export default function SelectRoomsPage() {
   const [editAdults, setEditAdults] = useState(adults);
   const [editChildren, setEditChildren] = useState(children);
   const [editInfants, setEditInfants] = useState(infants);
+  const [showDateEditor, setShowDateEditor] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(
+    checkInDate ?? new Date(),
+  );
+  const [editDates, setEditDates] = useState<Date[]>(
+    checkInDate && checkOutDate
+      ? [checkInDate, checkOutDate]
+      : checkInDate
+        ? [checkInDate]
+        : [],
+  );
 
   const rooms = property?.rooms ?? [];
   const totalAssignedGuests = selectedRooms.reduce(
@@ -202,10 +349,10 @@ export default function SelectRoomsPage() {
     fetchAvailability();
   }, [id, fetchAvailability]);
 
-  // Auto-suggest rooms once both property + availability are loaded
-  useEffect(() => {
-    if (property && availabilityData && !autoSuggested) {
-      setAutoSuggested(true);
+  // Auto-suggest rooms — reusable function
+  const suggestRoomsForGuests = useCallback(
+    (newTotalGuests: number) => {
+      if (!property || !availabilityData) return;
       const roomList = property.rooms ?? [];
       const available = roomList
         .filter((r) => {
@@ -219,12 +366,14 @@ export default function SelectRoomsPage() {
           return a.price_per_night - b.price_per_night;
         });
 
-      let remaining = totalGuests;
+      let remaining = newTotalGuests;
       const suggested: SelectedRoomData[] = [];
       for (const room of available) {
         if (remaining <= 0) break;
-        const assignedGuests =
-          room.capacity >= remaining ? remaining : room.capacity;
+        const assignedGuests = Math.min(
+          room.max_capacity || room.capacity,
+          remaining,
+        );
         suggested.push({
           roomId: room.id,
           assignedGuests,
@@ -240,8 +389,23 @@ export default function SelectRoomsPage() {
         remaining -= assignedGuests;
       }
       if (suggested.length > 0) setSelectedRooms(suggested);
+    },
+    [property, availabilityData],
+  );
+
+  // Auto-suggest rooms once both property + availability are loaded
+  useEffect(() => {
+    if (property && availabilityData && !autoSuggested) {
+      setAutoSuggested(true);
+      suggestRoomsForGuests(totalGuests);
     }
-  }, [property, availabilityData, autoSuggested, totalGuests]);
+  }, [
+    property,
+    availabilityData,
+    autoSuggested,
+    totalGuests,
+    suggestRoomsForGuests,
+  ]);
 
   // ── Room Logic ─────────────────────────────────────────────────────────────
 
@@ -495,9 +659,44 @@ export default function SelectRoomsPage() {
   const displayTax = Math.round(grandTotal * displayTaxRate);
   const displayTotal = grandTotal + displayTax;
 
+  // ── Date calendar handler ──────────────────────────────────────────────────
+
+  const handleCalendarDateClick = (day: number) => {
+    const clicked = new Date(
+      calendarMonth.getFullYear(),
+      calendarMonth.getMonth(),
+      day,
+    );
+    if (editDates.length === 0 || editDates.length === 2) {
+      setEditDates([clicked]);
+    } else {
+      const sorted =
+        editDates[0] <= clicked
+          ? [editDates[0], clicked]
+          : [clicked, editDates[0]];
+      setEditDates(sorted);
+      // Auto-apply once both dates are chosen
+      const p = new URLSearchParams({
+        check_in: format(sorted[0], "yyyy-MM-dd"),
+        check_out: format(sorted[1], "yyyy-MM-dd"),
+        adults: adults.toString(),
+        children: children.toString(),
+        infants: infants.toString(),
+      });
+      router.push(`/select-rooms/${id}?${p.toString()}`);
+      setShowDateEditor(false);
+    }
+  };
+
   // ── Guest update helper ────────────────────────────────────────────────────
 
   const applyGuestChange = () => {
+    const newTotal = editAdults + editChildren;
+    // Re-suggest rooms for the new guest count immediately (state-based,
+    // no navigation roundtrip needed for the auto-suggest).
+    suggestRoomsForGuests(newTotal);
+    setShowGuestEditor(false);
+    // Update URL so the displayed counts and totalGuests value stay in sync.
     const p = new URLSearchParams({
       check_in: checkIn,
       check_out: checkOut,
@@ -538,7 +737,10 @@ export default function SelectRoomsPage() {
         </div>
 
         {/* ── Two-column layout: scrollable left + sticky right ─────────── */}
-        <div className="lg:flex lg:gap-8 lg:items-start">
+        <div
+          className="lg:flex lg:gap-8"
+          style={{ paddingTop: "4rem", paddingBottom: "16rem" }}
+        >
           <div className="lg:flex-1 min-w-0">
             {/* Summary bar — mobile only */}
             <div
@@ -585,9 +787,18 @@ export default function SelectRoomsPage() {
 
             {/* Rooms heading + guest tracker */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-black text-gray-900">
-                Select Your Room
-              </h2>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => router.back()}
+                  className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-gray-200 transition-colors"
+                  style={{ background: "#ece9e2" }}
+                >
+                  <ArrowLeft size={16} className="text-gray-700" />
+                </button>
+                <h2 className="text-lg font-black text-gray-900">
+                  Select Your Room
+                </h2>
+              </div>
               {selectedRooms.length > 0 && (
                 <div
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
@@ -676,7 +887,7 @@ export default function SelectRoomsPage() {
                       {/* Room image */}
                       <div
                         className="relative overflow-hidden"
-                        style={{ height: "200px" }}
+                        style={{ height: "400px" }}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
@@ -1207,21 +1418,15 @@ export default function SelectRoomsPage() {
                 )}
               </div>
             )}
-
-            {/* T&C note */}
-            {!loading && rooms.length > 0 && (
-              <p className="text-xs text-gray-400 mt-6 leading-relaxed">
-                By selecting &ldquo;Book Now&rdquo;, you agree to the rules and
-                policies of this property. Bayaroo reserves the right to charge
-                your payment method if you do not show up or for any damage.
-              </p>
-            )}
           </div>
           {/* /left column */}
 
           {/* ── Right sticky panel (desktop only) ────────────────────────── */}
           <div className="hidden lg:block w-80 xl:w-96 shrink-0">
-            <div className="sticky space-y-4" style={{ top: "88px" }}>
+            <div className="sticky space-y-4" style={{ top: "96px" }}>
+              <h2 className="text-lg font-black text-gray-900">
+                Your Trip Details
+              </h2>
               {/* ── Trip Details ── */}
               <div
                 className="rounded-3xl p-5"
@@ -1236,33 +1441,75 @@ export default function SelectRoomsPage() {
 
                 {/* Dates */}
                 <div
-                  className="flex items-start justify-between pb-4 border-b"
+                  className="pb-4 border-b"
                   style={{ borderColor: "#f0efea" }}
                 >
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <CalendarDays size={13} className="text-gray-400" />
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
-                        Dates
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <CalendarDays size={13} className="text-gray-400" />
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+                          Dates
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-gray-800">
+                        {checkInDate ? format(checkInDate, "MMM d") : checkIn} –{" "}
+                        {checkOutDate
+                          ? format(checkOutDate, "MMM d, yyyy")
+                          : checkOut}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {nights} night{nights !== 1 ? "s" : ""}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold text-gray-800">
-                      {checkInDate ? format(checkInDate, "MMM d") : checkIn} –{" "}
-                      {checkOutDate
-                        ? format(checkOutDate, "MMM d, yyyy")
-                        : checkOut}
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      {nights} night{nights !== 1 ? "s" : ""}
-                    </p>
+                    <button
+                      onClick={() => {
+                        setShowGuestEditor(false);
+                        setShowDateEditor((v) => !v);
+                      }}
+                      className="text-xs font-bold hover:opacity-70 transition-opacity mt-0.5"
+                      style={{ color: "#F95622" }}
+                    >
+                      {showDateEditor ? "Cancel" : "Edit"}
+                    </button>
                   </div>
-                  <Link
-                    href={`/listing/${id}`}
-                    className="text-xs font-bold hover:opacity-70 transition-opacity mt-0.5"
-                    style={{ color: "#F95622" }}
-                  >
-                    Edit
-                  </Link>
+
+                  {/* Inline calendar */}
+                  {showDateEditor && (
+                    <div
+                      className="mt-4 pt-4 border-t"
+                      style={{ borderColor: "#f0efea" }}
+                    >
+                      {editDates.length === 1 && (
+                        <p
+                          className="text-xs text-center font-medium mb-3"
+                          style={{ color: "#F95622" }}
+                        >
+                          Now select check-out date
+                        </p>
+                      )}
+                      {editDates.length === 0 && (
+                        <p className="text-xs text-center text-gray-400 mb-3">
+                          Select check-in date
+                        </p>
+                      )}
+                      <InlineCalendar
+                        currentMonth={calendarMonth}
+                        selectedDates={editDates}
+                        onDateClick={handleCalendarDateClick}
+                        onMonthChange={(inc) =>
+                          setCalendarMonth(
+                            (m) =>
+                              new Date(
+                                m.getFullYear(),
+                                m.getMonth() + (inc ? 1 : -1),
+                                1,
+                              ),
+                          )
+                        }
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Guests */}
@@ -1522,6 +1769,16 @@ export default function SelectRoomsPage() {
                   >
                     Book Now →
                   </button>
+
+                  {/* T&C note */}
+                  {!loading && rooms.length > 0 && (
+                    <p className="text-xs text-gray-400 mt-6 leading-relaxed">
+                      By selecting &ldquo;Book Now&rdquo;, you agree to the
+                      rules and policies of this property. Bayaroo reserves the
+                      right to charge your payment method if you do not show up
+                      or for any damage.
+                    </p>
+                  )}
                 </div>
               ) : (
                 !loading && (
