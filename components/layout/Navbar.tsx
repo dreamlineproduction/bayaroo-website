@@ -82,7 +82,7 @@ const navLinks = [
       { label: "Wellness Retreats", href: "/experiences?type=wellness" },
     ],
   },
-  { label: "AI Trip Planner", href: "/explore#ai-planner" },
+  { label: "AI Trip Planner", href: "/ai-trip-planner" },
   { label: "Blog", href: "/blog" },
 ];
 

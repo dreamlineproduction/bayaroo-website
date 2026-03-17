@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
+    "@cometchat/chat-sdk-javascript": "^4.1.8",
     "@supabase/supabase-js": "^2.99.0",
     "@tabler/icons-react": "^3.40.0",
     "class-variance-authority": "^0.7.1",

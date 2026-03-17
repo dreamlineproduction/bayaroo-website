@@ -13,8 +13,8 @@ import {
   Phone,
   XCircle,
   HeadphonesIcon,
-  ArrowRight,
   Search,
+  Users,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import Navbar from "@/components/layout/Navbar";
@@ -83,6 +83,7 @@ const STATUS_STYLES: Record<
 };
 
 const PAYMENT_STYLES: Record<string, { bg: string; text: string }> = {
+  paid: { bg: "#E8F5E9", text: "#2E7D32" },
   success: { bg: "#E8F5E9", text: "#2E7D32" },
   failed: { bg: "#FFEBEE", text: "#C62828" },
   pending: { bg: "#FFF8E1", text: "#F9A825" },
@@ -111,6 +112,13 @@ export default function BookingsPage() {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
+        if (res.status === 401) {
+          // Token expired or revoked — clear stale auth and redirect
+          localStorage.removeItem("auth_token");
+          localStorage.removeItem("user");
+          router.replace("/login");
+          return;
+        }
         if (res.ok && data.success) {
           const raw = data.bookings?.data ?? data.bookings ?? [];
           setBookings(Array.isArray(raw) ? raw : []);
@@ -152,84 +160,102 @@ export default function BookingsPage() {
     >
       <Navbar forceDark />
 
-      <div className="container max-w-3xl mx-auto px-4 pt-28 pb-16">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">My Bookings</h1>
-
-        {/* ── Tabs ── */}
-        <div
-          className="flex gap-1 p-1 rounded-2xl mb-6"
-          style={{ background: "#e5e4df" }}
+      <div className="container max-w-5xl mx-auto px-4 pt-28 pb-16">
+        <h1
+          className="text-2xl font-bold text-gray-900 mb-6"
+          style={{ paddingTop: "6rem" }}
         >
-          {tabs.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all"
-              style={
-                tab === key
-                  ? {
-                      background: "#fff",
-                      color: "#0A0A0A",
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.10)",
-                    }
-                  : { color: "#6b7280" }
-              }
-            >
-              {label}
-              {key === "active" &&
-                bookings.filter((b) => getStatusCategory(b) === "active")
-                  .length > 0 && (
-                  <span
-                    className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-bold"
-                    style={{ background: "#F95622", color: "#fff" }}
-                  >
-                    {
-                      bookings.filter((b) => getStatusCategory(b) === "active")
-                        .length
-                    }
-                  </span>
-                )}
-            </button>
-          ))}
-        </div>
+          My Bookings
+        </h1>
 
-        {/* ── Content ── */}
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-24 gap-4">
-            <div
-              className="w-10 h-10 rounded-full border-4 animate-spin"
-              style={{ borderColor: "#FECB19", borderTopColor: "transparent" }}
-            />
-            <p className="text-sm text-gray-500">Loading bookings…</p>
-          </div>
-        ) : error ? (
-          <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
-            <p className="text-sm text-red-500 mb-4">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-sm font-semibold text-gray-700 underline"
-            >
-              Try again
-            </button>
-          </div>
-        ) : filtered.length === 0 ? (
-          <EmptyState tab={tab} />
-        ) : (
-          <div className="space-y-4" ref={menuRef}>
-            {filtered.map((booking) => (
-              <BookingCard
-                key={booking.id}
-                booking={booking}
-                menuOpen={openMenuId === booking.id}
-                onToggleMenu={() =>
-                  setOpenMenuId(openMenuId === booking.id ? null : booking.id)
+        <div
+          className="flex gap-6 items-start"
+          style={{ paddingTop: "0rem", marginBottom: "14rem" }}
+        >
+          {/* ── Left Tabs ── */}
+          <div
+            className="shrink-0 w-44 flex flex-col gap-1 p-1.5 rounded-2xl"
+            style={{ background: "#e5e4df" }}
+          >
+            {tabs.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left"
+                style={
+                  tab === key
+                    ? {
+                        background: "#fff",
+                        color: "#0A0A0A",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.10)",
+                      }
+                    : { color: "#6b7280" }
                 }
-                onCloseMenu={() => setOpenMenuId(null)}
-                router={router}
-              />
+              >
+                <span>{label}</span>
+                {key === "active" &&
+                  bookings.filter((b) => getStatusCategory(b) === "active")
+                    .length > 0 && (
+                    <span
+                      className="px-1.5 py-0.5 rounded-full text-xs font-bold"
+                      style={{ background: "#F95622", color: "#fff" }}
+                    >
+                      {
+                        bookings.filter(
+                          (b) => getStatusCategory(b) === "active",
+                        ).length
+                      }
+                    </span>
+                  )}
+              </button>
             ))}
           </div>
-        )}
+
+          {/* ── Content ── */}
+          <div className="flex-1 min-w-0">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-24 gap-4">
+                <div
+                  className="w-10 h-10 rounded-full border-4 animate-spin"
+                  style={{
+                    borderColor: "#FECB19",
+                    borderTopColor: "transparent",
+                  }}
+                />
+                <p className="text-sm text-gray-500">Loading bookings…</p>
+              </div>
+            ) : error ? (
+              <div className="bg-white rounded-2xl p-8 text-center shadow-sm">
+                <p className="text-sm text-red-500 mb-4">{error}</p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="text-sm font-semibold text-gray-700 underline"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : filtered.length === 0 ? (
+              <EmptyState tab={tab} />
+            ) : (
+              <div className="space-y-4" ref={menuRef}>
+                {filtered.map((booking) => (
+                  <BookingCard
+                    key={booking.id}
+                    booking={booking}
+                    menuOpen={openMenuId === booking.id}
+                    onToggleMenu={() =>
+                      setOpenMenuId(
+                        openMenuId === booking.id ? null : booking.id,
+                      )
+                    }
+                    onCloseMenu={() => setOpenMenuId(null)}
+                    router={router}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <Footer />
@@ -304,13 +330,13 @@ function BookingCard({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm overflow-hidden relative">
+    <div className="bg-white rounded-2xl shadow-sm relative">
       {/* Image + Info row */}
-      <div className="flex gap-0">
+      <div className="flex gap-0 rounded-2xl">
         {/* Thumbnail */}
         <div
           className="w-28 sm:w-36 shrink-0 cursor-pointer relative overflow-hidden"
-          style={{ minHeight: "9rem" }}
+          style={{ minHeight: "9rem", borderRadius: "1.25rem 0 0 1.25rem" }}
           onClick={() =>
             booking.property?.id &&
             window.open(`/listing/${booking.property.id}`, "_blank")
@@ -406,6 +432,14 @@ function BookingCard({
             <span>
               {booking.nights} night{booking.nights !== 1 ? "s" : ""}
             </span>
+            <span className="text-gray-300">·</span>
+            <Users size={11} />
+            <span>
+              {booking.adults} adult{booking.adults !== 1 ? "s" : ""}
+              {booking.children
+                ? `, ${booking.children} child${booking.children !== 1 ? "ren" : ""}`
+                : ""}
+            </span>
           </div>
 
           {/* Amount + Booking ID row */}
@@ -437,7 +471,8 @@ function BookingCard({
                   color: paymentStyle.text,
                 }}
               >
-                {booking.payment_status === "success"
+                {booking.payment_status === "success" ||
+                booking.payment_status === "paid"
                   ? "Paid"
                   : booking.payment_status === "failed"
                     ? "Payment Failed"
@@ -446,25 +481,6 @@ function BookingCard({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Manage button (footer strip) */}
-      <div
-        className="border-t flex items-center justify-between px-4 py-2.5"
-        style={{ borderColor: "#f3f2ef" }}
-      >
-        <span className="text-xs text-gray-400">
-          {booking.adults} adult{booking.adults !== 1 ? "s" : ""}
-          {booking.children ? ` · ${booking.children} children` : ""}
-        </span>
-        <button
-          onClick={() => router.push(`/bookings/${booking.id}`)}
-          className="flex items-center gap-1 text-xs font-bold transition-colors"
-          style={{ color: "#F95622" }}
-        >
-          Manage
-          <ArrowRight size={12} />
-        </button>
       </div>
     </div>
   );

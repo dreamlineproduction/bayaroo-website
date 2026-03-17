@@ -14,10 +14,18 @@ import {
   ChevronRight,
   Heart,
   Sparkles,
+  X,
 } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { GuestPicker, type GuestCounts } from "@/components/ui/guest-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 
@@ -77,16 +85,16 @@ function haversine(
 }
 
 const experienceFilters = [
-  { id: "mountain", icon: "???", label: "Mountains" },
-  { id: "beach", icon: "???", label: "Beaches" },
-  { id: "forest", icon: "??", label: "Forests" },
-  { id: "valley", icon: "???", label: "Valleys" },
-  { id: "wildlife", icon: "??", label: "Wildlife" },
-  { id: "heritage", icon: "???", label: "Heritage" },
-  { id: "wellness", icon: "?????", label: "Wellness" },
-  { id: "adventure", icon: "?????", label: "Adventure" },
-  { id: "village", icon: "???", label: "Village Life" },
-  { id: "rural", icon: "??", label: "Rural" },
+  { id: "mountain", icon: "⛰️", label: "Mountains" },
+  { id: "beach", icon: "🏖️", label: "Beaches" },
+  { id: "forest", icon: "🌲", label: "Forests" },
+  { id: "valley", icon: "🏞️", label: "Valleys" },
+  { id: "wildlife", icon: "🦁", label: "Wildlife" },
+  { id: "heritage", icon: "🏛️", label: "Heritage" },
+  { id: "wellness", icon: "🧘", label: "Wellness" },
+  { id: "adventure", icon: "🧗", label: "Adventure" },
+  { id: "village", icon: "🏡", label: "Village Life" },
+  { id: "rural", icon: "🌾", label: "Rural" },
 ];
 
 //    Property Card
@@ -568,7 +576,10 @@ export default function ExplorePage() {
               {/* Text search */}
               <div
                 className="flex items-center gap-2 flex-1 min-w-52 px-3 py-2.5 rounded-xl"
-                style={{ background: "rgba(255,255,255,0.15)" }}
+                style={{
+                  background: "rgba(255,255,255,0.15)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}
               >
                 <Search size={15} style={{ color: "#FECB19" }} />
                 <input
@@ -585,30 +596,48 @@ export default function ExplorePage() {
               </div>
 
               {/* State */}
-              <select
-                value={selectedState}
-                onChange={(e) => setSelectedState(e.target.value)}
-                className="px-3 py-2.5 rounded-xl text-sm font-semibold outline-none"
-                style={{
-                  background: "rgba(255,255,255,0.15)",
-                  color: selectedState ? "#fff" : "rgba(255,255,255,0.45)",
-                  border: "none",
-                  colorScheme: "dark",
-                }}
+              <Select
+                value={selectedState || "Select State"}
+                onValueChange={(v) =>
+                  setSelectedState(v === "__all__" ? "" : v)
+                }
               >
-                <option value="" style={{ background: "#1a1a1a" }}>
-                  All States
-                </option>
-                {states.map((s) => (
-                  <option
-                    key={s.id}
-                    value={s.name}
-                    style={{ background: "#1a1a1a" }}
-                  >
-                    {s.name}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="flex items-center gap-2 px-3 py-2.5  rounded-xl text-sm font-semibold transition-all whitespace-nowrap w-auto [&>svg.lucide-chevron-down]:hidden"
+                  style={{
+                    background: "rgba(255,255,255,0.15)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    padding: "20px 28px",
+                    color: selectedState ? "#fff" : "rgba(255,255,255,0.55)",
+                  }}
+                >
+                  <MapPin
+                    size={14}
+                    style={{ color: "#FECB19", flexShrink: 0 }}
+                  />
+                  <SelectValue placeholder="All States" />
+                  {selectedState && (
+                    <span
+                      role="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedState("");
+                      }}
+                      className="opacity-60 hover:opacity-100 flex items-center ml-1"
+                    >
+                      <X size={12} />
+                    </span>
+                  )}
+                </SelectTrigger>
+                <SelectContent className="rounded-xl">
+                  <SelectItem value="__all__">All States</SelectItem>
+                  {states.map((s) => (
+                    <SelectItem key={s.id} value={s.name}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
               {/* Date range picker */}
               <DateRangePicker value={dateRange} onChange={setDateRange} />
@@ -623,6 +652,7 @@ export default function ExplorePage() {
                   background: "linear-gradient(135deg,#FECB19,#F95622)",
                   color: "#0A0A0A",
                   boxShadow: "0 4px 20px rgba(249,86,34,0.45)",
+                  border: "1px solid rgba(255,255,255,0.2)",
                 }}
               >
                 <Search size={15} /> Search
@@ -724,7 +754,7 @@ export default function ExplorePage() {
         />
 
         {/* AI CTA */}
-        <div className="container pb-16">
+        <div className="container pb-16" style={{ marginBottom: "9rem" }}>
           <div
             className="rounded-3xl p-8 sm:p-12 flex flex-col sm:flex-row items-center justify-between gap-6"
             style={{ background: "#0A0A0A" }}
